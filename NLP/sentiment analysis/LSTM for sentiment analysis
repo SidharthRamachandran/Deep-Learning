@@ -1,0 +1,80 @@
+import tensorflow as tf
+from keras.layers import GlobalMaxPooling1D
+from keras.preprocessing import sequence, text
+from sklearn.metrics import confusion_matrix,accuracy_score
+from tensorflow.keras.layers import Input,SimpleRNN,GRU,LSTM,Dense,Flatten,Embedding
+from keras import  Model
+from keras.optimizers import Adam,SGD
+import matplotlib.pyplot as plt
+import pandas as pd
+from tensorflow.keras.preprocessing.text import Tokenizer
+from tensorflow.keras.preprocessing.sequence import pad_sequences
+
+#load datasets
+train=pd.read_csv('../train.csv')
+test=pd.read_csv('../test.csv')
+val=pd.read_csv('../val.csv')
+
+train['label']=train['category'].map({'joy':0,'sadness':1,'anger':2,'surprise':3,'love':4,'fear':5})
+test['label']=test['category'].map({'joy':0,'sadness':1,'anger':2,'surprise':3,'love':4,'fear':5})
+val['label']=val['category'].map({'joy':0,'sadness':1,'anger':2,'surprise':3,'love':4,'fear':5})
+
+#we combine train and test documents for training
+train=pd.concat([train,test])
+
+Xtrain=train['sent']
+ytrain=train['label'].values
+Xval=val['sent']
+yval=val['label'].values
+
+MAX_VOCAB_SIZE = 20000
+tokenizer = Tokenizer(num_words=MAX_VOCAB_SIZE)
+tokenizer.fit_on_texts(Xtrain)
+sequences = tokenizer.texts_to_sequences(Xtrain)
+val_sequences=tokenizer.texts_to_sequences(Xval)
+
+#see what Tokenizer have done to our text
+a=np.random.choice(range(0,17999))
+print(sequences[a],  Xtrain[a])
+print('noumber of words', len(sequences[a]))
+
+#padding sequences
+sequences= pad_sequences(sequences)
+print(sequences.shape)
+val_sequences = pad_sequences(val_sequences)
+print(val_sequences.shape)
+
+# get word -> integer mapping
+word2idx = tokenizer.word_index
+V = len(word2idx)
+print('Found %s unique tokens.' % V)
+
+#to define input shape
+T = sequences.shape[1]
+print(T)
+
+# Choosing embedding dimensions
+D=20
+# Hidden state dimensionality
+M = 15
+
+i=Input(shape=(T,))
+x = Embedding(V + 1, D)(i)
+x = LSTM(M, return_sequences=True)(x)
+x = GlobalMaxPooling1D()(x)
+x = Dense(6, activation='softmax')(x)
+
+model = Model(i, x)
+
+model.compile(optimizer='adam',loss='sparse_categorical_crossentropy',metrics=['accuracy'])
+r=model.fit(sequences,ytrain,validation_data=(val_sequences,yval),epochs=20)
+
+# Plot loss per iteration
+plt.plot(r.history['loss'], label='loss')
+plt.plot(r.history['val_loss'], label='val_loss')
+plt.legend()
+
+# Plot accuracy per iteration
+plt.plot(r.history['accuracy'], label='acc')
+plt.plot(r.history['val_accuracy'], label='val_acc')
+plt.legend()
